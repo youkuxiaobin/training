@@ -10,6 +10,9 @@ Small byte-level BPE tokenizer for pretraining experiments.
 - Keeps configured special tokens intact.
 - Saves and reloads vocab and merge files.
 
+See [BPE algorithm notes](bpe_tokenizer/ALGORITHM.md) for the implementation
+logic and sequence diagram.
+
 ## Example
 
 ```python
