@@ -1,0 +1,14 @@
+Language models learn by reading text and predicting the next token.
+Small models are useful because they make the full training loop easy to inspect.
+The tokenizer turns text into ids, the model predicts the next id, and the loss tells us how wrong it was.
+Training starts noisy, then the model slowly learns repeated patterns in the corpus.
+
+Language models learn by reading text and predicting the next token.
+Small models are useful because they make the full training loop easy to inspect.
+The tokenizer turns text into ids, the model predicts the next id, and the loss tells us how wrong it was.
+Training starts noisy, then the model slowly learns repeated patterns in the corpus.
+
+Language models learn by reading text and predicting the next token.
+Small models are useful because they make the full training loop easy to inspect.
+The tokenizer turns text into ids, the model predicts the next id, and the loss tells us how wrong it was.
+Training starts noisy, then the model slowly learns repeated patterns in the corpus.
