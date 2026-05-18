@@ -10,7 +10,7 @@
 ## 整体流程
 
 ```mermaid
-flowchart LR
+flowchart TD
     A["原始文本"] --> B["BPE 分词器训练"]
     B --> C["词表和合并规则"]
     C --> D["文本编码成 token ids"]
