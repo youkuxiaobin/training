@@ -16,6 +16,7 @@ def generate(
     temperature: float = 1.0,
     top_k: int | None = None,
     eos_id: int | None = None,
+    use_cache: bool = True,
 ) -> torch.Tensor:
     if max_new_tokens < 0:
         raise ValueError("max_new_tokens must be non-negative")
@@ -26,10 +27,27 @@ def generate(
 
     was_training = model.training
     model.eval()
+    past_key_values = None
     try:
         for _ in range(max_new_tokens):
-            input_window = input_ids[:, -model.cfg.context_length :]
-            logits, _ = model(input_window)
+            if use_cache and past_key_values is not None:
+                cached_tokens = past_key_values[0][0].size(-2)
+                if cached_tokens < model.cfg.context_length:
+                    model_input = input_ids[:, -1:]
+                else:
+                    past_key_values = None
+                    model_input = input_ids[:, -model.cfg.context_length :]
+            else:
+                model_input = input_ids[:, -model.cfg.context_length :]
+
+            if use_cache:
+                logits, _, past_key_values = model(
+                    model_input,
+                    past_key_values=past_key_values,
+                    use_cache=True,
+                )
+            else:
+                logits, _ = model(model_input)
             logits = logits[:, -1, :]
 
             if temperature <= 0:

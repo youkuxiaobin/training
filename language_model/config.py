@@ -17,6 +17,7 @@ class GPTConfig:
     rope_theta: float = 10_000.0
     norm_type: str = "rmsnorm"
     norm_eps: float = 1e-5
+    ffn_type: str = "swiglu"
 
     def __post_init__(self) -> None:
         if self.vocab_size <= 0:
@@ -39,6 +40,8 @@ class GPTConfig:
             raise ValueError("norm_type must be 'rmsnorm' or 'layernorm'")
         if self.norm_eps <= 0:
             raise ValueError("norm_eps must be positive")
+        if self.ffn_type not in {"swiglu", "gelu"}:
+            raise ValueError("ffn_type must be 'swiglu' or 'gelu'")
 
     def to_dict(self) -> dict[str, int | float | bool | str]:
         return asdict(self)

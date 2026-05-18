@@ -60,7 +60,8 @@ y = [25, 87, 43, 91]
     "dropout_rate": 0.1,
     "qkv_bias": False,
     "rope_theta": 10000.0,
-    "norm_type": "rmsnorm"
+    "norm_type": "rmsnorm",
+    "ffn_type": "swiglu"
 }
 ```
 
@@ -75,6 +76,7 @@ y = [25, 87, 43, 91]
 - `qkv_bias`：注意力里的 Q、K、V 线性层是否使用偏置。
 - `rope_theta`：RoPE 位置编码的频率基数。
 - `norm_type`：默认使用 RMSNorm，也可以切换成 LayerNorm。
+- `ffn_type`：默认使用 SwiGLU，也可以切换成 GELU 前馈网络。
 
 ## 文件结构
 
@@ -86,6 +88,7 @@ bpe_tokenizer/
 language_model/
   tokenization.py     分词器训练、文本准备、token 编码
   data.py             构造训练 batch
+  training.py         验证误差、学习率调度、检查点保存
   config.py           模型配置和参数检查
   norms.py            RMSNorm 和 LayerNorm 选择
   rope.py             RoPE 位置编码
@@ -226,16 +229,24 @@ Q、K、V 的直观含义：
 
 注意力层负责在 token 之间传递信息，前馈网络负责对每个 token 自己的表示做进一步加工。
 
-当前前馈网络结构是：
+当前默认前馈网络是 SwiGLU，结构可以理解成两条支路：
 
 ```text
-Linear(n_embd -> 4 * n_embd)
-  -> GELU
-  -> Linear(4 * n_embd -> n_embd)
+输入 x
+  -> gate 分支：Linear -> SiLU
+  -> up 分支：Linear
+  -> 两条分支相乘
+  -> down 分支：Linear
   -> Dropout
 ```
 
-先升维再降维，是 Transformer 里常见的设计。升维给模型更多空间做非线性变换，降维后再回到原来的隐藏维度。
+SwiGLU 相比普通 GELU 前馈层多了一个“门控”效果。简单说，它不仅会加工信息，还会学会哪些信息应该通过、哪些信息应该被压低。
+
+如果想切回普通 GELU 前馈层，可以在配置里使用：
+
+```python
+"ffn_type": "gelu"
+```
 
 ## Transformer Block
 
@@ -281,11 +292,20 @@ x = x + feed_forward(norm(x))
 2. 训练 BPE 分词器。
 3. 保存词表和合并规则。
 4. 把文本编码成 token ids。
-5. 随机截取多个长度为 `context_length` 的片段作为输入。
-6. 把每个片段右移一位作为预测目标。
-7. 前向计算 logits 和 loss。
-8. 反向传播并更新模型参数。
-9. 保存模型权重和配置。
+5. 按比例切出训练集和验证集。
+6. 随机截取多个长度为 `context_length` 的片段作为输入。
+7. 把每个片段右移一位作为预测目标。
+8. 按 warmup + cosine decay 调整学习率。
+9. 前向计算 logits 和 loss。
+10. 反向传播、裁剪梯度并更新模型参数。
+11. 定期计算训练误差和验证误差。
+12. 保存 `latest.pt` 和 `best.pt`，最后也保存 `model.pt`。
+
+三个保存文件的含义：
+
+- `latest.pt`：最近一次评估后的模型。
+- `best.pt`：验证误差最低的模型。
+- `model.pt`：训练结束时的模型。
 
 运行示例：
 
@@ -310,6 +330,20 @@ python3 scripts/train_small_model.py --steps 100
 7. 重复直到生成指定数量的 token。
 8. 把 token ids 解码回文本。
 
+生成时默认使用 KV cache。它会记住已经算过的 Key 和 Value，生成下一个 token 时不用把前面的上下文全部重新算一遍。这样生成长一点的文本会更快。
+
+如果想关闭缓存，可以加：
+
+```bash
+--no-cache
+```
+
+如果想使用验证误差最低的模型生成，可以加：
+
+```bash
+--checkpoint best.pt
+```
+
 运行示例：
 
 ```bash
@@ -321,6 +355,8 @@ python3 scripts/generate_text.py --prompt "Language models"
 - `--temperature`：控制随机性。越低越稳定，越高越发散。
 - `--top-k`：只从概率最高的前 k 个 token 里采样。
 - `--max-new-tokens`：最多生成多少个新 token。
+- `--no-cache`：关闭生成缓存。
+- `--checkpoint`：选择加载 `model.pt`、`latest.pt` 或 `best.pt`。
 
 ## 快速开始
 

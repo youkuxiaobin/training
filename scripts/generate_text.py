@@ -19,10 +19,12 @@ from language_model.tokenization import encode_text, eos_token_id, load_language
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate text from a trained small model.")
     parser.add_argument("--model-dir", type=Path, default=PROJECT_ROOT / "runs" / "tiny_model")
+    parser.add_argument("--checkpoint", default="model.pt")
     parser.add_argument("--prompt", default="Language models")
     parser.add_argument("--max-new-tokens", type=int, default=80)
     parser.add_argument("--temperature", type=float, default=0.8)
     parser.add_argument("--top-k", type=int, default=40)
+    parser.add_argument("--no-cache", action="store_true")
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda", "mps"])
     return parser.parse_args()
 
@@ -41,7 +43,7 @@ def main() -> None:
     args = parse_args()
     device = resolve_device(args.device)
 
-    checkpoint = torch.load(args.model_dir / "model.pt", map_location=device)
+    checkpoint = torch.load(args.model_dir / args.checkpoint, map_location=device)
     special_tokens = checkpoint["special_tokens"]
     tokenizer = load_language_tokenizer(args.model_dir, special_tokens)
 
@@ -61,6 +63,7 @@ def main() -> None:
         temperature=args.temperature,
         top_k=args.top_k,
         eos_id=eos_id,
+        use_cache=not args.no_cache,
     )
     print(tokenizer.decode(output_ids[0].tolist()))
 
