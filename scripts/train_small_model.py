@@ -21,8 +21,8 @@ from language_model.training import (
 )
 from language_model.tokenization import (
     DEFAULT_SPECIAL_TOKENS,
-    append_eos_if_needed,
     encode_text,
+    read_training_text,
     train_language_tokenizer,
 )
 
@@ -71,8 +71,7 @@ def main() -> None:
         raise ValueError("eval_iters must be positive")
     torch.manual_seed(args.seed)
 
-    text = args.input.read_text(encoding="utf-8")
-    training_text = append_eos_if_needed(text, DEFAULT_SPECIAL_TOKENS[0])
+    training_text = read_training_text(args.input, DEFAULT_SPECIAL_TOKENS[0])
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     tokenizer = train_language_tokenizer(

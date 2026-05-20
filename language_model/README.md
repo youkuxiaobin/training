@@ -2,7 +2,7 @@
 
 `language_model` is split by training and model-building steps:
 
-- `tokenization.py`: tokenizer training, text preparation, token encode helpers.
+- `tokenization.py`: tokenizer training, directory/file text loading, token encode helpers.
 - `data.py`: token tensor creation and training batch sampling.
 - `training.py`: validation loss, learning-rate schedule, checkpoint saving.
 - `config.py`: model configuration and validation.

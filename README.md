@@ -288,7 +288,7 @@ x = x + feed_forward(norm(x))
 
 它做这些事：
 
-1. 读取训练文本。
+1. 读取训练文本。`--input` 可以是单个文件，也可以是一个目录。
 2. 训练 BPE 分词器。
 3. 保存词表和合并规则。
 4. 把文本编码成 token ids。
@@ -314,6 +314,12 @@ python3 scripts/train_small_model.py --steps 100
 ```
 
 默认会使用 [examples/tiny_corpus.txt](examples/tiny_corpus.txt)，输出到 `runs/tiny_model/`。
+
+如果传入目录，会递归读取目录下所有非隐藏普通文件，并按稳定顺序拼接。每个文件后面都会补一个 `<|endoftext|>`，这样模型能知道文件之间的边界。
+
+```bash
+python3 scripts/train_small_model.py --input /path/to/text_dir --steps 100
+```
 
 ## 生成逻辑
 

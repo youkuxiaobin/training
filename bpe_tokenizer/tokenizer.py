@@ -26,7 +26,7 @@ def train_bpe(
     vocab_size: int,
     special_tokens: Sequence[str] | None = None,
 ) -> tuple[dict[int, bytes], list[Pair]]:
-    """Train a byte-level BPE vocabulary from a UTF-8 text file.
+    """Train a byte-level BPE vocabulary from UTF-8 text files.
 
     Returns:
         A pair of (vocab, merges). The vocab maps token ids to raw bytes, and
@@ -40,7 +40,7 @@ def train_bpe(
             f"vocab_size must be at least {min_vocab_size} for byte tokens and specials"
         )
 
-    text = Path(input_path).read_text(encoding="utf-8")
+    text = read_text_corpus(input_path)
     vocab: dict[int, bytes] = {i: bytes([i]) for i in range(256)}
     for index, special_token in enumerate(special_tokens, start=256):
         vocab[index] = special_token.encode("utf-8")
@@ -215,6 +215,45 @@ def _pretoken_counts(text: str, special_tokens: Sequence[str]) -> Counter[Word]:
             if word:
                 counts[word] += 1
     return counts
+
+
+def iter_text_files(input_path: str | Path) -> list[Path]:
+    path = Path(input_path)
+    if path.is_file():
+        return [path]
+    if not path.exists():
+        raise FileNotFoundError(path)
+    if not path.is_dir():
+        raise ValueError(f"input_path must be a file or directory: {path}")
+
+    files = [
+        file_path
+        for file_path in sorted(path.rglob("*"), key=lambda item: item.as_posix())
+        if file_path.is_file() and not _has_hidden_path_part(file_path.relative_to(path))
+    ]
+    if not files:
+        raise ValueError(f"no text files found under directory: {path}")
+    return files
+
+
+def read_text_corpus(input_path: str | Path, separator: str = "\n") -> str:
+    texts: list[str] = []
+    for file_path in iter_text_files(input_path):
+        try:
+            texts.append(file_path.read_text(encoding="utf-8"))
+        except UnicodeDecodeError as exc:
+            raise UnicodeDecodeError(
+                exc.encoding,
+                exc.object,
+                exc.start,
+                exc.end,
+                f"{exc.reason} while reading {file_path}",
+            ) from exc
+    return separator.join(texts)
+
+
+def _has_hidden_path_part(path: Path) -> bool:
+    return any(part.startswith(".") for part in path.parts)
 
 
 def _pair_counts(word_counts: Counter[Word]) -> Counter[Pair]:

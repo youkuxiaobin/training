@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Sequence
 
-from bpe_tokenizer import Tokenizer, train_bpe
+from bpe_tokenizer import Tokenizer, iter_text_files, train_bpe
 
 
 DEFAULT_SPECIAL_TOKENS = ["<|endoftext|>"]
@@ -35,6 +35,17 @@ def load_language_tokenizer(
 
 def append_eos_if_needed(text: str, eos_token: str = DEFAULT_SPECIAL_TOKENS[0]) -> str:
     return text if text.endswith(eos_token) else text + eos_token
+
+
+def read_training_text(
+    input_path: str | Path,
+    eos_token: str = DEFAULT_SPECIAL_TOKENS[0],
+) -> str:
+    texts = [
+        append_eos_if_needed(file_path.read_text(encoding="utf-8"), eos_token)
+        for file_path in iter_text_files(input_path)
+    ]
+    return "\n".join(texts)
 
 
 def encode_text(tokenizer: Tokenizer, text: str) -> list[int]:

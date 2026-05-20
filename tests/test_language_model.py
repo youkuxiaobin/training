@@ -16,6 +16,7 @@ from language_model.training import cosine_lr
 from language_model.tokenization import (
     append_eos_if_needed,
     encode_text,
+    read_training_text,
     train_language_tokenizer,
 )
 
@@ -216,6 +217,16 @@ class LanguageModelTest(unittest.TestCase):
 
         self.assertGreater(len(token_ids), 0)
         self.assertEqual(tokenizer.decode(token_ids), "hello<|endoftext|>")
+
+    def test_read_training_text_appends_eos_per_file(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "part2.txt").write_text("second", encoding="utf-8")
+            (root / "part1.txt").write_text("first<|endoftext|>", encoding="utf-8")
+
+            text = read_training_text(root)
+
+        self.assertEqual(text, "first<|endoftext|>\nsecond<|endoftext|>")
 
 
 if __name__ == "__main__":

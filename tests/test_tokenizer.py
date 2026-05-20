@@ -2,7 +2,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from bpe_tokenizer import Tokenizer, train_bpe
+from bpe_tokenizer import Tokenizer, iter_text_files, read_text_corpus, train_bpe
 
 
 class TokenizerTest(unittest.TestCase):
@@ -54,6 +54,25 @@ class TokenizerTest(unittest.TestCase):
 
         self.assertEqual(first_vocab, second_vocab)
         self.assertEqual(first_merges, second_merges)
+
+    def test_training_from_directory_reads_files_in_order(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "b.txt").write_text("banana banana", encoding="utf-8")
+            (root / "a.txt").write_text("apple apple", encoding="utf-8")
+            (root / ".hidden.txt").write_text("hidden", encoding="utf-8")
+            nested = root / "nested"
+            nested.mkdir()
+            (nested / "c.txt").write_text("citrus", encoding="utf-8")
+
+            files = iter_text_files(root)
+            corpus = read_text_corpus(root)
+            vocab, merges = train_bpe(root, 270, [])
+
+        self.assertEqual([path.name for path in files], ["a.txt", "b.txt", "c.txt"])
+        self.assertEqual(corpus, "apple apple\nbanana banana\ncitrus")
+        self.assertGreater(len(vocab), 256)
+        self.assertGreater(len(merges), 0)
 
     def test_empty_text_round_trip(self) -> None:
         tokenizer = self.train_tokenizer()
