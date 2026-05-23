@@ -1,0 +1,200 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1500" viewBox="0 0 1500 1500" role="img" aria-labelledby="title desc">
+  <title id="title">Small language model architecture</title>
+  <desc id="desc">A readable architecture diagram for a small GPT-style language model. The left side shows the full model pipeline. The right side expands the exact CausalSelfAttention sequence from qkv linear to resid dropout.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#111827"/>
+    </marker>
+    <marker id="arrow-gray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <filter id="shadow" x="-8%" y="-8%" width="116%" height="116%">
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#0f172a" flood-opacity="0.10"/>
+    </filter>
+    <style>
+      .title { font: 700 38px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif; fill: #111827; }
+      .section { font: 700 31px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif; fill: #111827; }
+      .label { font: 700 23px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif; fill: #111827; }
+      .small { font: 500 17px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif; fill: #334155; }
+      .note { font: 600 18px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif; fill: #334155; }
+      .box { stroke: #111827; stroke-width: 2.3; filter: url(#shadow); }
+      .inner { stroke: #111827; stroke-width: 2; }
+      .arrow { stroke: #111827; stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
+      .thin-arrow { stroke: #111827; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .dash-arrow { stroke: #64748b; stroke-width: 2.2; stroke-dasharray: 8 7; fill: none; marker-end: url(#arrow-gray); }
+      .skip { stroke: #475569; stroke-width: 2.4; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect width="1500" height="1500" fill="#ffffff"/>
+  <text class="title" x="750" y="55" text-anchor="middle">小语言模型结构图</text>
+  <text class="small" x="750" y="88" text-anchor="middle">左侧是整体模型流程，右侧展开 CausalSelfAttention 的真实执行顺序</text>
+
+  <!-- Full model pipeline -->
+  <g id="full-model">
+    <rect x="55" y="115" width="625" height="1308" rx="24" fill="#f8fafc" stroke="#111827" stroke-width="3"/>
+    <text class="section" x="367.5" y="160" text-anchor="middle">整体模型</text>
+
+    <g id="input">
+      <rect class="box" x="142" y="190" width="451" height="58" rx="10" fill="#ffffff"/>
+      <text class="label" x="367.5" y="227" text-anchor="middle">Input token ids</text>
+    </g>
+    <path class="arrow" d="M367.5 248 L367.5 270"/>
+
+    <g id="embedding">
+      <rect class="box" x="142" y="270" width="451" height="66" rx="10" fill="#ffe4e6"/>
+      <text class="label" x="367.5" y="296" text-anchor="middle">Token Embedding</text>
+      <text class="small" x="367.5" y="321" text-anchor="middle">token id -&gt; n_embd 向量</text>
+    </g>
+    <path class="arrow" d="M367.5 336 L367.5 358"/>
+
+    <g id="embedding-dropout">
+      <rect class="box" x="142" y="358" width="451" height="58" rx="10" fill="#f3e8ff"/>
+      <text class="label" x="367.5" y="395" text-anchor="middle">Embedding Dropout</text>
+    </g>
+    <path class="arrow" d="M367.5 416 L367.5 446"/>
+
+    <g id="block">
+      <rect x="95" y="446" width="545" height="704" rx="22" fill="#f1f8ff" stroke="#111827" stroke-width="2.7"/>
+      <text class="section" x="367.5" y="490" text-anchor="middle">Transformer Block x N</text>
+
+      <rect class="inner" x="165" y="520" width="405" height="50" rx="8" fill="#ffffff"/>
+      <text class="label" x="367.5" y="553" text-anchor="middle">Block input x</text>
+      <path class="thin-arrow" d="M367.5 570 L367.5 589"/>
+
+      <rect class="inner" x="165" y="589" width="405" height="50" rx="8" fill="#fef3c7"/>
+      <text class="label" x="367.5" y="622" text-anchor="middle">Step 1: RMSNorm</text>
+      <path class="thin-arrow" d="M367.5 639 L367.5 658"/>
+
+      <rect class="inner" x="165" y="658" width="405" height="54" rx="8" fill="#e0f2fe"/>
+      <text class="label" x="367.5" y="692" text-anchor="middle">CausalSelfAttention</text>
+      <path class="thin-arrow" d="M367.5 712 L367.5 731"/>
+
+      <rect class="inner" x="165" y="731" width="405" height="58" rx="8" fill="#fef3c7"/>
+      <text class="label" x="367.5" y="755" text-anchor="middle">Add residual</text>
+      <text class="small" x="367.5" y="779" text-anchor="middle">x + attention</text>
+      <path class="thin-arrow" d="M367.5 789 L367.5 808"/>
+
+      <rect class="inner" x="165" y="808" width="405" height="50" rx="8" fill="#fef3c7"/>
+      <text class="label" x="367.5" y="841" text-anchor="middle">Step 2: RMSNorm</text>
+      <path class="thin-arrow" d="M367.5 858 L367.5 877"/>
+
+      <rect class="inner" x="165" y="877" width="405" height="54" rx="8" fill="#dcfce7"/>
+      <text class="label" x="367.5" y="911" text-anchor="middle">SwiGLU Feed Forward</text>
+      <path class="thin-arrow" d="M367.5 931 L367.5 950"/>
+
+      <rect class="inner" x="165" y="950" width="405" height="58" rx="8" fill="#fef3c7"/>
+      <text class="label" x="367.5" y="974" text-anchor="middle">Add residual</text>
+      <text class="small" x="367.5" y="998" text-anchor="middle">x + feed_forward</text>
+      <path class="thin-arrow" d="M367.5 1008 L367.5 1027"/>
+
+      <rect class="inner" x="165" y="1027" width="405" height="50" rx="8" fill="#ffffff"/>
+      <text class="label" x="367.5" y="1060" text-anchor="middle">Block output</text>
+
+      <path class="skip" d="M570 545 L615 545 L615 760 L575 760"/>
+      <path class="skip" d="M570 760 L615 760 L615 979 L575 979"/>
+    </g>
+
+    <path class="arrow" d="M367.5 1150 L367.5 1180"/>
+    <rect class="box" x="142" y="1180" width="451" height="58" rx="10" fill="#fef3c7"/>
+    <text class="label" x="367.5" y="1217" text-anchor="middle">Final RMSNorm</text>
+    <path class="arrow" d="M367.5 1238 L367.5 1260"/>
+
+    <rect class="box" x="142" y="1260" width="451" height="66" rx="10" fill="#eef2ff"/>
+    <text class="label" x="367.5" y="1286" text-anchor="middle">Linear Output Head</text>
+    <text class="small" x="367.5" y="1311" text-anchor="middle">n_embd -&gt; vocab_size</text>
+    <path class="arrow" d="M367.5 1326 L367.5 1348"/>
+
+    <rect class="box" x="142" y="1348" width="451" height="58" rx="10" fill="#dcfce7"/>
+    <text class="label" x="367.5" y="1385" text-anchor="middle">Logits / Next-token probabilities</text>
+  </g>
+
+  <!-- Attention expansion -->
+  <g id="attention-expanded">
+    <rect x="735" y="115" width="710" height="1190" rx="24" fill="#ffffff" stroke="#475569" stroke-width="3" stroke-dasharray="11 9"/>
+    <text class="section" x="1090" y="160" text-anchor="middle">CausalSelfAttention 内部</text>
+
+    <g id="qkv">
+      <rect class="box" x="820" y="198" width="540" height="66" rx="10" fill="#ffedd5"/>
+      <text class="label" x="1090" y="224" text-anchor="middle">qkv linear</text>
+      <text class="small" x="1090" y="249" text-anchor="middle">生成 Q / K / V，并拆成多头</text>
+    </g>
+    <path class="arrow" d="M1090 264 L1090 287"/>
+
+    <g id="rope">
+      <rect class="box" x="820" y="287" width="540" height="66" rx="10" fill="#dcfce7"/>
+      <text class="label" x="1090" y="313" text-anchor="middle">RoPE</text>
+      <text class="small" x="1090" y="338" text-anchor="middle">只旋转 Q 和 K</text>
+    </g>
+    <path class="arrow" d="M1090 353 L1090 376"/>
+
+    <g id="score">
+      <rect class="box" x="820" y="376" width="540" height="72" rx="10" fill="#eef2ff"/>
+      <text class="label" x="1090" y="405" text-anchor="middle">q @ k.transpose(-1, -2)</text>
+      <text class="small" x="1090" y="432" text-anchor="middle">再除以 sqrt(head_dim)</text>
+    </g>
+    <path class="arrow" d="M1090 448 L1090 471"/>
+
+    <g id="mask">
+      <rect class="box" x="820" y="471" width="540" height="58" rx="10" fill="#fee2e2"/>
+      <text class="label" x="1090" y="508" text-anchor="middle">causal mask</text>
+    </g>
+    <path class="arrow" d="M1090 529 L1090 552"/>
+
+    <g id="softmax">
+      <rect class="box" x="820" y="552" width="540" height="58" rx="10" fill="#eff6ff"/>
+      <text class="label" x="1090" y="589" text-anchor="middle">softmax</text>
+    </g>
+    <path class="arrow" d="M1090 610 L1090 633"/>
+
+    <g id="dropout">
+      <rect class="box" x="820" y="633" width="540" height="58" rx="10" fill="#f5f3ff"/>
+      <text class="label" x="1090" y="670" text-anchor="middle">dropout</text>
+    </g>
+    <path class="arrow" d="M1090 691 L1090 714"/>
+
+    <g id="score-value">
+      <rect class="box" x="820" y="714" width="540" height="58" rx="10" fill="#ecfeff"/>
+      <text class="label" x="1090" y="751" text-anchor="middle">attention score @ value</text>
+    </g>
+    <path class="arrow" d="M1090 772 L1090 795"/>
+
+    <g id="view">
+      <rect class="box" x="820" y="795" width="540" height="72" rx="10" fill="#f3e8ff"/>
+      <text class="label" x="1090" y="824" text-anchor="middle">view</text>
+      <text class="small" x="1090" y="851" text-anchor="middle">transpose + contiguous + view</text>
+    </g>
+    <path class="arrow" d="M1090 867 L1090 890"/>
+
+    <g id="out-proj">
+      <rect class="box" x="820" y="890" width="540" height="58" rx="10" fill="#e0f2fe"/>
+      <text class="label" x="1090" y="927" text-anchor="middle">out_proj linear</text>
+    </g>
+    <path class="arrow" d="M1090 948 L1090 971"/>
+
+    <g id="resid-dropout">
+      <rect class="box" x="820" y="971" width="540" height="58" rx="10" fill="#fef9c3"/>
+      <text class="label" x="1090" y="1008" text-anchor="middle">resid_dropout</text>
+    </g>
+
+    <g id="cache-note">
+      <rect x="850" y="1105" width="480" height="78" rx="12" fill="#ffffff" stroke="#64748b" stroke-width="2.2" stroke-dasharray="8 7"/>
+      <text class="note" x="1090" y="1137" text-anchor="middle">生成时可使用 KV cache</text>
+      <text class="small" x="1090" y="1164" text-anchor="middle">历史 K / V 在 RoPE 后拼接，再进入注意力分数计算</text>
+    </g>
+  </g>
+
+  <path class="dash-arrow" d="M570 685 L735 685"/>
+
+  <!-- Training and generation outputs -->
+  <g id="outputs">
+    <path class="arrow" d="M367.5 1406 L250 1442"/>
+    <path class="arrow" d="M367.5 1406 L485 1442"/>
+
+    <rect class="box" x="85" y="1432" width="330" height="54" rx="10" fill="#fff7ed"/>
+    <text class="label" x="250" y="1467" text-anchor="middle">Training: Cross Entropy Loss</text>
+
+    <rect class="box" x="448" y="1432" width="330" height="54" rx="10" fill="#eff6ff"/>
+    <text class="label" x="613" y="1467" text-anchor="middle">Generation: sample next token</text>
+  </g>
+</svg>

@@ -48,6 +48,10 @@ y = [25, 87, 43, 91]
   -> logits
 ```
 
+对应的结构图：
+
+![小语言模型结构图](docs/model_structure.svg)
+
 默认训练脚本里的小模型配置是：
 
 ```python
@@ -105,6 +109,9 @@ scripts/
 
 examples/
   tiny_corpus.txt       示例训练文本
+
+docs/
+  model_structure.svg   模型结构图
 ```
 
 ## 分词器
