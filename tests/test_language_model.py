@@ -19,6 +19,7 @@ from language_model.tokenization import (
     read_training_text,
     train_language_tokenizer,
 )
+from scripts.train_small_model import build_train_val_tokens
 
 
 class LanguageModelTest(unittest.TestCase):
@@ -227,6 +228,34 @@ class LanguageModelTest(unittest.TestCase):
             text = read_training_text(root)
 
         self.assertEqual(text, "first<|endoftext|>\nsecond<|endoftext|>")
+
+    def test_build_train_val_tokens_accepts_explicit_valid_input(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            train_input = root / "TinyStories-train.txt"
+            valid_input = root / "TinyStories-valid.txt"
+            train_input.write_text(
+                "train story one. train story two. train story three.",
+                encoding="utf-8",
+            )
+            valid_input.write_text(
+                "valid story one. valid story two. valid story three.",
+                encoding="utf-8",
+            )
+            tokenizer = train_language_tokenizer(train_input, 270)
+
+            train_tokens, valid_tokens = build_train_val_tokens(
+                tokenizer,
+                train_input=train_input,
+                valid_input=valid_input,
+                val_fraction=0.5,
+                context_length=4,
+                eos_token="<|endoftext|>",
+            )
+
+        self.assertIn("train story", tokenizer.decode(train_tokens.tolist()))
+        self.assertIn("valid story", tokenizer.decode(valid_tokens.tolist()))
+        self.assertNotIn("valid story", tokenizer.decode(train_tokens.tolist()))
 
 
 if __name__ == "__main__":

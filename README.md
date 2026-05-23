@@ -298,8 +298,8 @@ x = x + feed_forward(norm(x))
 1. 读取训练文本。`--input` 可以是单个文件，也可以是一个目录。
 2. 训练 BPE 分词器。
 3. 保存词表和合并规则。
-4. 把文本编码成 token ids。
-5. 按比例切出训练集和验证集。
+4. 把训练文本编码成 `train_tokens`。
+5. 如果传了 `--valid-input`，把验证文本编码成 `valid_tokens`；否则按比例从训练文本里切出验证集。
 6. 随机截取多个长度为 `context_length` 的片段作为输入。
 7. 把每个片段右移一位作为预测目标。
 8. 按 warmup + cosine decay 调整学习率。
@@ -327,6 +327,20 @@ python3 scripts/train_small_model.py --steps 100
 ```bash
 python3 scripts/train_small_model.py --input /path/to/text_dir --steps 100
 ```
+
+如果数据集本身已经分好了训练集和验证集，比如 TinyStories，可以这样传：
+
+```bash
+python3 scripts/train_small_model.py \
+  --train-input /path/to/TinyStories-train.txt \
+  --valid-input /path/to/TinyStories-valid.txt \
+  --output-dir runs/tinystories_model \
+  --vocab-size 8192 \
+  --context-length 256 \
+  --steps 1000
+```
+
+这种模式下，BPE 分词器只会用 `--train-input` 训练；`--valid-input` 只用于验证误差，不会混进训练数据。
 
 ## 生成逻辑
 

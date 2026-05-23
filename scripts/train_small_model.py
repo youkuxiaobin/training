@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 import torch
 
@@ -27,9 +28,31 @@ from language_model.tokenization import (
 )
 
 
+class CorpusInputs(NamedTuple):
+    train_input: Path
+    valid_input: Path | None
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train a small GPT-style model.")
-    parser.add_argument("--input", type=Path, default=PROJECT_ROOT / "examples" / "tiny_corpus.txt")
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=PROJECT_ROOT / "examples" / "tiny_corpus.txt",
+        help="Backward-compatible training input path. Use --train-input for explicit train/valid files.",
+    )
+    parser.add_argument(
+        "--train-input",
+        type=Path,
+        default=None,
+        help="Training corpus file or directory. Overrides --input when provided.",
+    )
+    parser.add_argument(
+        "--valid-input",
+        type=Path,
+        default=None,
+        help="Validation corpus file or directory. If omitted, validation is split from training data.",
+    )
     parser.add_argument("--output-dir", type=Path, default=PROJECT_ROOT / "runs" / "tiny_model")
     parser.add_argument("--vocab-size", type=int, default=512)
     parser.add_argument("--context-length", type=int, default=64)
@@ -53,6 +76,14 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def resolve_corpus_inputs(args: argparse.Namespace) -> CorpusInputs:
+    train_input = args.train_input if args.train_input is not None else args.input
+    valid_input = args.valid_input
+    if valid_input is not None and train_input.resolve() == valid_input.resolve():
+        raise ValueError("train_input and valid_input must be different paths")
+    return CorpusInputs(train_input=train_input, valid_input=valid_input)
+
+
 def resolve_device(name: str) -> torch.device:
     if name != "auto":
         return torch.device(name)
@@ -63,6 +94,33 @@ def resolve_device(name: str) -> torch.device:
     return torch.device("cpu")
 
 
+def build_train_val_tokens(
+    tokenizer,
+    train_input: Path,
+    valid_input: Path | None,
+    val_fraction: float,
+    context_length: int,
+    eos_token: str,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    train_text = read_training_text(train_input, eos_token)
+    train_tokens = make_token_tensor(encode_text(tokenizer, train_text))
+    if train_tokens.numel() <= context_length:
+        raise ValueError("train input text is too short for the requested context length")
+
+    if valid_input is None:
+        return split_train_val(
+            train_tokens,
+            val_fraction=val_fraction,
+            context_length=context_length,
+        )
+
+    valid_text = read_training_text(valid_input, eos_token)
+    valid_tokens = make_token_tensor(encode_text(tokenizer, valid_text))
+    if valid_tokens.numel() <= context_length:
+        raise ValueError("valid input text is too short for the requested context length")
+    return train_tokens, valid_tokens
+
+
 def main() -> None:
     args = parse_args()
     if args.eval_interval <= 0:
@@ -71,23 +129,23 @@ def main() -> None:
         raise ValueError("eval_iters must be positive")
     torch.manual_seed(args.seed)
 
-    training_text = read_training_text(args.input, DEFAULT_SPECIAL_TOKENS[0])
+    corpus_inputs = resolve_corpus_inputs(args)
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     tokenizer = train_language_tokenizer(
-        args.input,
+        corpus_inputs.train_input,
         args.vocab_size,
         DEFAULT_SPECIAL_TOKENS,
     )
     tokenizer.save(args.output_dir / "vocab.json", args.output_dir / "merges.json")
 
-    token_ids = make_token_tensor(encode_text(tokenizer, training_text))
-    if token_ids.numel() <= args.context_length:
-        raise ValueError("input text is too short for the requested context length")
-    train_tokens, val_tokens = split_train_val(
-        token_ids,
+    train_tokens, val_tokens = build_train_val_tokens(
+        tokenizer,
+        train_input=corpus_inputs.train_input,
+        valid_input=corpus_inputs.valid_input,
         val_fraction=args.val_fraction,
         context_length=args.context_length,
+        eos_token=DEFAULT_SPECIAL_TOKENS[0],
     )
 
     cfg = GPTConfig(
