@@ -9,11 +9,15 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote
 
-from openai_chat.client import DEFAULT_LOCAL_MODEL, OpenAIChatClient, OpenAIChatError
+from inference.openai_chat.client import (
+    DEFAULT_LOCAL_MODEL,
+    OpenAIChatClient,
+    OpenAIChatError,
+)
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 class OpenAIChatHandler(BaseHTTPRequestHandler):

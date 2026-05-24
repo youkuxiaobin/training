@@ -1,6 +1,10 @@
 import unittest
 
-from openai_chat.client import OpenAIChatClient, OpenAIChatError, messages_to_prompt
+from inference.openai_chat.client import (
+    OpenAIChatClient,
+    OpenAIChatError,
+    messages_to_prompt,
+)
 
 
 class FakeTokenizer:

@@ -16,7 +16,7 @@ runs/tiny_model/
 Start the local API and web page:
 
 ```bash
-python3 -m openai_chat.server \
+python3 -m inference.openai_chat.server \
   --model-dir runs/tiny_model \
   --checkpoint best.pt \
   --host 127.0.0.1 \

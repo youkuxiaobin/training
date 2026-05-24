@@ -105,12 +105,8 @@ language_model/
 
 inference/
   predictor.py        加载训练好的模型并生成文本
+  openai_chat/        本地模型的 OpenAI 风格接口和页面
   README.md           推理使用说明
-
-openai_chat/
-  client.py           本地模型的 OpenAI 风格接口
-  server.py           本地模型网页服务和对话 API
-  static/             页面、样式和交互脚本
 
 scripts/
   train_small_model.py  训练入口
@@ -413,7 +409,7 @@ python3 scripts/generate_text.py --prompt "Language models"
 如果想把本地训练好的模型包装成 OpenAI 风格接口，可以直接加载训练输出目录：
 
 ```bash
-python3 -m openai_chat.server \
+python3 -m inference.openai_chat.server \
   --model-dir runs/tiny_model \
   --checkpoint best.pt \
   --host 127.0.0.1 \
