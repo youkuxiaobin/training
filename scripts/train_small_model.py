@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 from typing import NamedTuple
@@ -28,6 +29,9 @@ from language_model.tokenization import (
 )
 
 
+logger = logging.getLogger(__name__)
+
+
 class CorpusInputs(NamedTuple):
     train_input: Path
     valid_input: Path | None
@@ -39,7 +43,10 @@ def parse_args() -> argparse.Namespace:
         "--input",
         type=Path,
         default=PROJECT_ROOT / "examples" / "tiny_corpus.txt",
-        help="Backward-compatible training input path. Use --train-input for explicit train/valid files.",
+        help=(
+            "Backward-compatible training input path. "
+            "Use --train-input for explicit train/valid files."
+        ),
     )
     parser.add_argument(
         "--train-input",
@@ -51,7 +58,10 @@ def parse_args() -> argparse.Namespace:
         "--valid-input",
         type=Path,
         default=None,
-        help="Validation corpus file or directory. If omitted, validation is split from training data.",
+        help=(
+            "Validation corpus file or directory. "
+            "If omitted, validation is split from training data."
+        ),
     )
     parser.add_argument("--output-dir", type=Path, default=PROJECT_ROOT / "runs" / "tiny_model")
     parser.add_argument("--vocab-size", type=int, default=512)
@@ -71,9 +81,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--val-fraction", type=float, default=0.1)
     parser.add_argument("--eval-interval", type=int, default=10)
     parser.add_argument("--eval-iters", type=int, default=10)
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+    )
+    parser.add_argument(
+        "--bpe-log-every",
+        type=int,
+        default=500,
+        help="Log BPE merge progress every N merges. Use 0 to log only first and final merges.",
+    )
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda", "mps"])
     return parser.parse_args()
+
+
+def configure_logging(log_level: str) -> None:
+    logging.basicConfig(
+        level=getattr(logging, log_level),
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+        datefmt="%H:%M:%S",
+    )
 
 
 def resolve_corpus_inputs(args: argparse.Namespace) -> CorpusInputs:
@@ -102,27 +131,47 @@ def build_train_val_tokens(
     context_length: int,
     eos_token: str,
 ) -> tuple[torch.Tensor, torch.Tensor]:
+    logger.info("loading train corpus | input=%s", train_input)
     train_text = read_training_text(train_input, eos_token)
     train_tokens = make_token_tensor(encode_text(tokenizer, train_text))
     if train_tokens.numel() <= context_length:
         raise ValueError("train input text is too short for the requested context length")
+    logger.info(
+        "encoded train corpus | characters=%d | tokens=%d",
+        len(train_text),
+        train_tokens.numel(),
+    )
 
     if valid_input is None:
-        return split_train_val(
+        logger.info("building validation split from train corpus | val_fraction=%.4f", val_fraction)
+        train_split, valid_split = split_train_val(
             train_tokens,
             val_fraction=val_fraction,
             context_length=context_length,
         )
+        logger.info(
+            "prepared train/valid tokens | train_tokens=%d | valid_tokens=%d | source=split",
+            train_split.numel(),
+            valid_split.numel(),
+        )
+        return train_split, valid_split
 
+    logger.info("loading valid corpus | input=%s", valid_input)
     valid_text = read_training_text(valid_input, eos_token)
     valid_tokens = make_token_tensor(encode_text(tokenizer, valid_text))
     if valid_tokens.numel() <= context_length:
         raise ValueError("valid input text is too short for the requested context length")
+    logger.info(
+        "prepared train/valid tokens | train_tokens=%d | valid_tokens=%d | source=explicit_valid",
+        train_tokens.numel(),
+        valid_tokens.numel(),
+    )
     return train_tokens, valid_tokens
 
 
 def main() -> None:
     args = parse_args()
+    configure_logging(args.log_level)
     if args.eval_interval <= 0:
         raise ValueError("eval_interval must be positive")
     if args.eval_iters <= 0:
@@ -130,14 +179,30 @@ def main() -> None:
     torch.manual_seed(args.seed)
 
     corpus_inputs = resolve_corpus_inputs(args)
+    logger.info(
+        "starting training run | train_input=%s | valid_input=%s | output_dir=%s | seed=%d",
+        corpus_inputs.train_input,
+        corpus_inputs.valid_input,
+        args.output_dir,
+        args.seed,
+    )
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    logger.info("training tokenizer | vocab_size=%d", args.vocab_size)
     tokenizer = train_language_tokenizer(
         corpus_inputs.train_input,
         args.vocab_size,
         DEFAULT_SPECIAL_TOKENS,
+        log_every=args.bpe_log_every,
     )
     tokenizer.save(args.output_dir / "vocab.json", args.output_dir / "merges.json")
+    logger.info(
+        "saved tokenizer | vocab=%s | merges=%s | final_vocab_size=%d | merges_count=%d",
+        args.output_dir / "vocab.json",
+        args.output_dir / "merges.json",
+        len(tokenizer.vocab),
+        len(tokenizer.merges),
+    )
 
     train_tokens, val_tokens = build_train_val_tokens(
         tokenizer,
@@ -165,6 +230,25 @@ def main() -> None:
     best_val_loss = float("inf")
     last_train_loss = None
     last_val_loss = None
+    logger.info(
+        "initialized model | device=%s | parameters=%d | layers=%d | heads=%d "
+        "| embedding_dim=%d | context_length=%d",
+        device,
+        model.num_parameters(),
+        cfg.n_layer,
+        cfg.n_head,
+        cfg.n_embd,
+        cfg.context_length,
+    )
+    logger.info(
+        "starting optimizer loop | steps=%d | batch_size=%d | lr=%.2e "
+        "| min_lr=%.2e | warmup_steps=%d",
+        args.steps,
+        args.batch_size,
+        args.lr,
+        args.min_lr,
+        args.warmup_steps,
+    )
 
     model.train()
     for step in range(1, args.steps + 1):
@@ -209,9 +293,15 @@ def main() -> None:
             is_best = last_val_loss < best_val_loss
             if is_best:
                 best_val_loss = last_val_loss
-            print(
-                f"step {step:4d} | train {last_train_loss:.4f} "
-                f"| val {last_val_loss:.4f} | lr {lr:.2e}"
+            logger.info(
+                "eval | step=%d/%d | train_loss=%.4f | val_loss=%.4f | lr=%.2e "
+                "| best_val_loss=%.4f",
+                step,
+                args.steps,
+                last_train_loss,
+                last_val_loss,
+                lr,
+                best_val_loss,
             )
             save_checkpoint(
                 args.output_dir / "latest.pt",
@@ -223,6 +313,7 @@ def main() -> None:
                 train_loss=last_train_loss,
                 val_loss=last_val_loss,
             )
+            logger.info("saved checkpoint | path=%s", args.output_dir / "latest.pt")
             if is_best:
                 save_checkpoint(
                     args.output_dir / "best.pt",
@@ -234,6 +325,7 @@ def main() -> None:
                     train_loss=last_train_loss,
                     val_loss=last_val_loss,
                 )
+                logger.info("saved best checkpoint | path=%s", args.output_dir / "best.pt")
 
     save_checkpoint(
         args.output_dir / "model.pt",
@@ -245,7 +337,11 @@ def main() -> None:
         train_loss=last_train_loss,
         val_loss=last_val_loss,
     )
-    print(f"saved to {args.output_dir}")
+    logger.info(
+        "finished training | final_checkpoint=%s | output_dir=%s",
+        args.output_dir / "model.pt",
+        args.output_dir,
+    )
 
 
 if __name__ == "__main__":

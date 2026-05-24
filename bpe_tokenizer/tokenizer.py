@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 from collections import Counter
 from functools import lru_cache
 from pathlib import Path
@@ -19,12 +20,14 @@ GPT2_PRETOKENIZER_PATTERN = (
 Token = bytes
 Pair = tuple[Token, Token]
 Word = tuple[Token, ...]
+logger = logging.getLogger(__name__)
 
 
 def train_bpe(
     input_path: str | Path,
     vocab_size: int,
     special_tokens: Sequence[str] | None = None,
+    log_every: int = 500,
 ) -> tuple[dict[int, bytes], list[Pair]]:
     """Train a byte-level BPE vocabulary from UTF-8 text files.
 
@@ -40,7 +43,20 @@ def train_bpe(
             f"vocab_size must be at least {min_vocab_size} for byte tokens and specials"
         )
 
-    text = read_text_corpus(input_path)
+    input_files = iter_text_files(input_path)
+    logger.info(
+        "starting BPE training | input=%s | files=%d | target_vocab_size=%d | special_tokens=%d",
+        input_path,
+        len(input_files),
+        vocab_size,
+        len(special_tokens),
+    )
+    text = read_text_corpus_from_files(input_files)
+    logger.info(
+        "loaded BPE corpus | characters=%d | utf8_bytes=%d",
+        len(text),
+        len(text.encode("utf-8")),
+    )
     vocab: dict[int, bytes] = {i: bytes([i]) for i in range(256)}
     for index, special_token in enumerate(special_tokens, start=256):
         vocab[index] = special_token.encode("utf-8")
@@ -48,20 +64,42 @@ def train_bpe(
     next_token_id = len(vocab)
     word_counts = _pretoken_counts(text, special_tokens)
     merges: list[Pair] = []
+    target_merges = vocab_size - next_token_id
+    logger.info(
+        "counted BPE pretokens | unique_pretokens=%d | requested_merges=%d",
+        len(word_counts),
+        target_merges,
+    )
 
     while next_token_id < vocab_size:
         pair_counts = _pair_counts(word_counts)
         if not pair_counts:
+            logger.info("stopping BPE training early | reason=no_pair_counts")
             break
 
         best_pair = max(pair_counts, key=lambda pair: (pair_counts[pair], pair))
         merged_token = best_pair[0] + best_pair[1]
+        merge_index = len(merges) + 1
 
         vocab[next_token_id] = merged_token
         merges.append(best_pair)
         word_counts = _merge_word_counts(word_counts, best_pair, merged_token)
         next_token_id += 1
+        if _should_log_bpe_merge(merge_index, target_merges, log_every):
+            logger.info(
+                "BPE merge progress | merge=%d/%d | vocab_size=%d | pair_count=%d | token_bytes=%d",
+                merge_index,
+                target_merges,
+                len(vocab),
+                pair_counts[best_pair],
+                len(merged_token),
+            )
 
+    logger.info(
+        "finished BPE training | final_vocab_size=%d | merges=%d",
+        len(vocab),
+        len(merges),
+    )
     return vocab, merges
 
 
@@ -237,8 +275,15 @@ def iter_text_files(input_path: str | Path) -> list[Path]:
 
 
 def read_text_corpus(input_path: str | Path, separator: str = "\n") -> str:
+    return read_text_corpus_from_files(iter_text_files(input_path), separator)
+
+
+def read_text_corpus_from_files(
+    file_paths: Sequence[Path],
+    separator: str = "\n",
+) -> str:
     texts: list[str] = []
-    for file_path in iter_text_files(input_path):
+    for file_path in file_paths:
         try:
             texts.append(file_path.read_text(encoding="utf-8"))
         except UnicodeDecodeError as exc:
@@ -250,6 +295,12 @@ def read_text_corpus(input_path: str | Path, separator: str = "\n") -> str:
                 f"{exc.reason} while reading {file_path}",
             ) from exc
     return separator.join(texts)
+
+
+def _should_log_bpe_merge(merge_index: int, target_merges: int, log_every: int) -> bool:
+    if merge_index in {1, target_merges}:
+        return True
+    return log_every > 0 and merge_index % log_every == 0
 
 
 def _has_hidden_path_part(path: Path) -> bool:

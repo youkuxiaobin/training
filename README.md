@@ -328,6 +328,20 @@ python3 scripts/train_small_model.py --steps 100
 python3 scripts/train_small_model.py --input /path/to/text_dir --steps 100
 ```
 
+训练脚本默认会打印关键日志，包括 BPE 读取了多少文件、词表合并进度、训练集和验证集 token 数、模型参数量、每次评估的 loss、checkpoint 保存位置。
+
+如果想减少日志，可以改日志级别：
+
+```bash
+python3 scripts/train_small_model.py --log-level WARNING
+```
+
+如果想调整 BPE 合并进度的打印频率，可以改：
+
+```bash
+python3 scripts/train_small_model.py --bpe-log-every 100
+```
+
 如果数据集本身已经分好了训练集和验证集，比如 TinyStories，可以这样传：
 
 ```bash

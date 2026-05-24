@@ -15,9 +15,10 @@ def train_language_tokenizer(
     input_path: str | Path,
     vocab_size: int,
     special_tokens: Sequence[str] | None = None,
+    log_every: int = 500,
 ) -> Tokenizer:
     resolved_special_tokens = list(special_tokens or DEFAULT_SPECIAL_TOKENS)
-    vocab, merges = train_bpe(input_path, vocab_size, resolved_special_tokens)
+    vocab, merges = train_bpe(input_path, vocab_size, resolved_special_tokens, log_every=log_every)
     return Tokenizer(vocab, merges, resolved_special_tokens)
 
 
