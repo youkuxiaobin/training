@@ -103,6 +103,15 @@ language_model/
   generation.py       文本生成逻辑
   model.py            兼容旧导入方式
 
+inference/
+  predictor.py        加载训练好的模型并生成文本
+  README.md           推理使用说明
+
+openai_chat/
+  client.py           OpenAI 接口调用
+  server.py           本地网页服务和对话 API
+  static/             页面、样式和交互脚本
+
 scripts/
   train_small_model.py  训练入口
   generate_text.py      生成入口
@@ -358,7 +367,7 @@ python3 scripts/train_small_model.py \
 
 ## 生成逻辑
 
-生成脚本是 [scripts/generate_text.py](scripts/generate_text.py)。
+生成脚本是 [scripts/generate_text.py](scripts/generate_text.py)，模型加载和推理逻辑在 [inference/](inference/) 目录里。
 
 它做这些事：
 
@@ -398,6 +407,32 @@ python3 scripts/generate_text.py --prompt "Language models"
 - `--max-new-tokens`：最多生成多少个新 token。
 - `--no-cache`：关闭生成缓存。
 - `--checkpoint`：选择加载 `model.pt`、`latest.pt` 或 `best.pt`。
+
+## OpenAI 页面对话框
+
+如果想用 OpenAI API 做一个网页对话框，先设置密钥：
+
+```bash
+export OPENAI_API_KEY="你的 OpenAI API Key"
+```
+
+启动本地页面：
+
+```bash
+python3 -m openai_chat.server --host 127.0.0.1 --port 8000
+```
+
+然后打开：
+
+```text
+http://127.0.0.1:8000
+```
+
+默认模型是 `gpt-5.2`。如果想换模型，可以设置：
+
+```bash
+export OPENAI_MODEL="gpt-5.2"
+```
 
 ## 快速开始
 

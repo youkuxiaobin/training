@@ -5,6 +5,7 @@ from __future__ import annotations
 import torch
 from torch import nn
 from torch.nn import functional as F
+from torch.utils.checkpoint import checkpoint
 
 from language_model.attention import KVCache
 from language_model.blocks import TransformerBlock
@@ -21,6 +22,7 @@ class GPTLanguageModel(nn.Module):
         self.blocks = nn.ModuleList([TransformerBlock(cfg) for _ in range(cfg.n_layer)])
         self.final_norm = build_norm(cfg)
         self.out_head = nn.Linear(cfg.n_embd, cfg.vocab_size, bias=False)
+        self.gradient_checkpointing = False
 
     def forward(
         self,
@@ -50,6 +52,8 @@ class GPTLanguageModel(nn.Module):
             if use_cache:
                 x, present_kv = block(x, past_kv=past_kv, use_cache=True)
                 present_key_values.append(present_kv)
+            elif self.training and self.gradient_checkpointing:
+                x = checkpoint(block, x, use_reentrant=False)
             else:
                 x = block(x)
         x = self.final_norm(x)
@@ -67,3 +71,6 @@ class GPTLanguageModel(nn.Module):
 
     def num_parameters(self) -> int:
         return sum(parameter.numel() for parameter in self.parameters())
+
+    def set_gradient_checkpointing(self, enabled: bool = True) -> None:
+        self.gradient_checkpointing = enabled
