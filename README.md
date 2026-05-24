@@ -108,8 +108,8 @@ inference/
   README.md           推理使用说明
 
 openai_chat/
-  client.py           OpenAI 接口调用
-  server.py           本地网页服务和对话 API
+  client.py           本地模型的 OpenAI 风格接口
+  server.py           本地模型网页服务和对话 API
   static/             页面、样式和交互脚本
 
 scripts/
@@ -410,16 +410,14 @@ python3 scripts/generate_text.py --prompt "Language models"
 
 ## OpenAI 页面对话框
 
-如果想用 OpenAI API 做一个网页对话框，先设置密钥：
+如果想把本地训练好的模型包装成 OpenAI 风格接口，可以直接加载训练输出目录：
 
 ```bash
-export OPENAI_API_KEY="你的 OpenAI API Key"
-```
-
-启动本地页面：
-
-```bash
-python3 -m openai_chat.server --host 127.0.0.1 --port 8000
+python3 -m openai_chat.server \
+  --model-dir runs/tiny_model \
+  --checkpoint best.pt \
+  --host 127.0.0.1 \
+  --port 8000
 ```
 
 然后打开：
@@ -428,10 +426,17 @@ python3 -m openai_chat.server --host 127.0.0.1 --port 8000
 http://127.0.0.1:8000
 ```
 
-默认模型是 `gpt-5.2`。如果想换模型，可以设置：
+也可以用 OpenAI 风格接口请求：
 
 ```bash
-export OPENAI_MODEL="gpt-5.2"
+curl http://127.0.0.1:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "local-tiny-gpt",
+    "messages": [{"role": "user", "content": "Once upon a time"}],
+    "max_tokens": 100,
+    "temperature": 0.8
+  }'
 ```
 
 ## 快速开始

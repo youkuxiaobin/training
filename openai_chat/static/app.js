@@ -43,6 +43,8 @@ async function sendMessage(content) {
       model: modelEl.value.trim(),
       messages,
       max_output_tokens: Number(maxTokensEl.value || 512),
+      temperature: 0.8,
+      top_k: 40,
     }),
   });
   const payload = await response.json();

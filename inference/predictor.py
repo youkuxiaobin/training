@@ -64,6 +64,7 @@ class TextGenerator:
         temperature: float = 0.8,
         top_k: int | None = 40,
         use_cache: bool = True,
+        include_prompt: bool = True,
     ) -> str:
         eos_id = self._eos_id()
         prompt_ids = encode_text(self.tokenizer, prompt)
@@ -80,7 +81,10 @@ class TextGenerator:
             eos_id=eos_id,
             use_cache=use_cache,
         )
-        return self.tokenizer.decode(output_ids[0].tolist())
+        output = output_ids[0].tolist()
+        if not include_prompt:
+            output = output[len(prompt_ids) :]
+        return self.tokenizer.decode(output)
 
     def _eos_id(self) -> int | None:
         if not self.special_tokens:

@@ -1,4 +1,4 @@
-"""Serve the OpenAI chat page and JSON API."""
+"""Serve a local-model OpenAI-compatible chat API and web page."""
 
 from __future__ import annotations
 
@@ -9,18 +9,23 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote
 
-from openai_chat.client import OpenAIChatClient, OpenAIChatError
+from openai_chat.client import DEFAULT_LOCAL_MODEL, OpenAIChatClient, OpenAIChatError
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class OpenAIChatHandler(BaseHTTPRequestHandler):
-    server_version = "OpenAIChat/0.1"
+    server_version = "LocalOpenAIChat/0.1"
+    chat_client: OpenAIChatClient | None = None
 
     def do_GET(self) -> None:
         if self.path in {"/", "/index.html"}:
             self._serve_file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
+            return
+        if self.path == "/v1/models":
+            self._send_json(self._client().list_models())
             return
         if self.path.startswith("/static/"):
             requested = unquote(self.path.removeprefix("/static/"))
@@ -33,35 +38,46 @@ class OpenAIChatHandler(BaseHTTPRequestHandler):
         self._send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:
-        if self.path != "/api/chat":
-            self._send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+        if self.path == "/v1/chat/completions":
+            self._handle_chat_completion()
             return
-
-        try:
-            payload = self._read_json()
-            messages = payload.get("messages", [])
-            if not isinstance(messages, list):
-                raise ValueError("messages must be a list")
-            instructions = payload.get("instructions", "")
-            if not isinstance(instructions, str):
-                raise ValueError("instructions must be a string")
-            model = payload.get("model")
-            if model is not None and not isinstance(model, str):
-                raise ValueError("model must be a string")
-            client = OpenAIChatClient(model=model.strip() if model else None)
-            reply = client.create_reply(
-                messages=messages,
-                instructions=instructions,
-                max_output_tokens=int(payload.get("max_output_tokens", 512)),
-            )
-            self._send_json({"reply": reply, "model": client.model})
-        except (ValueError, TypeError, json.JSONDecodeError) as exc:
-            self._send_json({"error": f"bad request: {exc}"}, HTTPStatus.BAD_REQUEST)
-        except OpenAIChatError as exc:
-            self._send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
+        if self.path == "/api/chat":
+            self._handle_page_chat()
+            return
+        self._send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
     def log_message(self, format: str, *args: object) -> None:
         print(f"{self.address_string()} - {format % args}")
+
+    def _handle_chat_completion(self) -> None:
+        try:
+            payload = self._read_json()
+            response = self._client().create_chat_completion(payload)
+            self._send_json(response)
+        except (ValueError, TypeError, json.JSONDecodeError, OpenAIChatError) as exc:
+            self._send_json({"error": {"message": str(exc)}}, HTTPStatus.BAD_REQUEST)
+
+    def _handle_page_chat(self) -> None:
+        try:
+            payload = self._read_json()
+            response = self._client().create_chat_completion(
+                {
+                    "model": payload.get("model"),
+                    "messages": payload.get("messages", []),
+                    "max_tokens": payload.get("max_output_tokens", 128),
+                    "temperature": payload.get("temperature", 0.8),
+                    "top_k": payload.get("top_k", 40),
+                }
+            )
+            content = response["choices"][0]["message"]["content"]
+            self._send_json({"reply": content, "model": response["model"]})
+        except (ValueError, TypeError, json.JSONDecodeError, OpenAIChatError) as exc:
+            self._send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+
+    def _client(self) -> OpenAIChatClient:
+        if self.chat_client is None:
+            raise OpenAIChatError("local model is not loaded")
+        return self.chat_client
 
     def _read_json(self) -> dict[str, object]:
         content_length = int(self.headers.get("Content-Length", "0"))
@@ -79,7 +95,11 @@ class OpenAIChatHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(content)
 
-    def _send_json(self, payload: dict[str, object], status: HTTPStatus = HTTPStatus.OK) -> None:
+    def _send_json(
+        self,
+        payload: dict[str, object],
+        status: HTTPStatus = HTTPStatus.OK,
+    ) -> None:
         content = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -93,20 +113,34 @@ def _content_type(file_path: Path) -> str:
         return "text/css; charset=utf-8"
     if file_path.suffix == ".js":
         return "text/javascript; charset=utf-8"
+    if file_path.suffix == ".html":
+        return "text/html; charset=utf-8"
     return "application/octet-stream"
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run the OpenAI chat web server.")
+    parser = argparse.ArgumentParser(description="Run a local OpenAI-compatible chat API.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--model-dir", type=Path, default=PROJECT_ROOT / "runs" / "tiny_model")
+    parser.add_argument("--checkpoint", default="best.pt")
+    parser.add_argument("--model-name", default=DEFAULT_LOCAL_MODEL)
+    parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda", "mps"])
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    OpenAIChatHandler.chat_client = OpenAIChatClient.from_checkpoint(
+        args.model_dir,
+        checkpoint_name=args.checkpoint,
+        device=args.device,
+        model_name=args.model_name,
+    )
     server = ThreadingHTTPServer((args.host, args.port), OpenAIChatHandler)
-    print(f"OpenAI chat page: http://{args.host}:{args.port}")
+    print(f"loaded local model: {args.model_dir / args.checkpoint}")
+    print(f"OpenAI-compatible API: http://{args.host}:{args.port}/v1/chat/completions")
+    print(f"chat page: http://{args.host}:{args.port}")
     server.serve_forever()
 
 

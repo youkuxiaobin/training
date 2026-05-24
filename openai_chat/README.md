@@ -1,27 +1,49 @@
-# OpenAI Chat
+# Local OpenAI-Compatible Chat
 
-This directory contains a small web chat page backed by the OpenAI Responses API.
+This directory serves a locally trained model through an OpenAI-compatible chat API.
 
-Set your API key before starting the server:
+Expected model directory:
 
-```bash
-export OPENAI_API_KEY="your_api_key"
+```text
+runs/tiny_model/
+  best.pt
+  latest.pt
+  model.pt
+  vocab.json
+  merges.json
 ```
 
-Run the page locally:
+Start the local API and web page:
 
 ```bash
-python3 -m openai_chat.server --host 127.0.0.1 --port 8000
+python3 -m openai_chat.server \
+  --model-dir runs/tiny_model \
+  --checkpoint best.pt \
+  --host 127.0.0.1 \
+  --port 8000
 ```
 
-Then open:
+Open the page:
 
 ```text
 http://127.0.0.1:8000
 ```
 
-Optional model override:
+OpenAI-compatible endpoint:
+
+```text
+POST http://127.0.0.1:8000/v1/chat/completions
+```
+
+Example request:
 
 ```bash
-export OPENAI_MODEL="gpt-5.2"
+curl http://127.0.0.1:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "local-tiny-gpt",
+    "messages": [{"role": "user", "content": "Once upon a time"}],
+    "max_tokens": 100,
+    "temperature": 0.8
+  }'
 ```
