@@ -103,6 +103,9 @@ language_model/
   generation.py       文本生成逻辑
   model.py            兼容旧导入方式
 
+finetune/
+  sft/                SFT、Freeze、LoRA、QLoRA 微调
+
 inference/
   predictor.py        加载训练好的模型并生成文本
   openai_chat/        本地模型的 OpenAI 风格接口和页面
@@ -403,6 +406,39 @@ python3 scripts/generate_text.py --prompt "Language models"
 - `--max-new-tokens`：最多生成多少个新 token。
 - `--no-cache`：关闭生成缓存。
 - `--checkpoint`：选择加载 `model.pt`、`latest.pt` 或 `best.pt`。
+
+## SFT 微调
+
+预训练会让模型学会续写普通文本。如果想让它更像聊天助手一样回答问题，需要继续做 SFT，也就是用“用户问题 + 助手回答”的数据继续训练。
+
+SFT 入口在 [finetune/sft/](finetune/sft/)。
+
+最小数据格式：
+
+```json
+{"messages":[{"role":"user","content":"who are you?"},{"role":"assistant","content":"I am a small local assistant."}]}
+```
+
+运行示例：
+
+```bash
+python3 -m finetune.sft.train \
+  --model-dir runs/tiny_model \
+  --checkpoint best.pt \
+  --train-input data/sft_train.jsonl \
+  --output-dir runs/sft_lora \
+  --method lora \
+  --steps 1000
+```
+
+当前支持四种方式：
+
+- `full`：训练全部参数。
+- `freeze`：冻住大部分参数，只训练少量层。
+- `lora`：训练小型适配分支，通常是最实用的起点。
+- `qlora`：先压缩基础权重，再训练 LoRA 分支，更省内存。
+
+完整流程、时序图、原理和参数说明见 [finetune/sft/README.md](finetune/sft/README.md)。
 
 ## OpenAI 页面对话框
 
