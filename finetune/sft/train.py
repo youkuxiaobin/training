@@ -23,6 +23,13 @@ from finetune.sft.data import (
     sample_sft_batch,
     split_sft_examples,
 )
+from finetune.sft.methods import (
+    DEFAULT_LORA_TARGETS,
+    FinetuneMethodConfig,
+    apply_finetune_method,
+    export_inference_model,
+    trainable_parameter_count,
+)
 from language_model.config import GPTConfig
 from language_model.gpt import GPTLanguageModel
 from language_model.tokenization import (
@@ -55,6 +62,37 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--eval-interval", type=int, default=100)
     parser.add_argument("--eval-iters", type=int, default=20)
     parser.add_argument("--train-on-prompt", action="store_true")
+    parser.add_argument(
+        "--method",
+        choices=["full", "freeze", "lora", "qlora"],
+        default="full",
+        help="Fine-tuning method.",
+    )
+    parser.add_argument("--lora-rank", type=int, default=8)
+    parser.add_argument("--lora-alpha", type=float, default=16.0)
+    parser.add_argument("--lora-dropout", type=float, default=0.05)
+    parser.add_argument("--lora-targets", default=DEFAULT_LORA_TARGETS)
+    parser.add_argument(
+        "--freeze-last-layers",
+        type=int,
+        default=0,
+        help="For --method freeze, also train the last N transformer blocks.",
+    )
+    parser.add_argument(
+        "--freeze-train-embeddings",
+        action="store_true",
+        help="For --method freeze, also train token embeddings.",
+    )
+    parser.add_argument(
+        "--adapter-train-head",
+        action="store_true",
+        help="For LoRA/QLoRA, also train the output head.",
+    )
+    parser.add_argument(
+        "--adapter-train-norms",
+        action="store_true",
+        help="For LoRA/QLoRA, also train norm layers.",
+    )
     parser.add_argument("--gradient-checkpointing", action="store_true")
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda", "mps"])
@@ -102,7 +140,12 @@ def run_sft(args: argparse.Namespace) -> None:
     model = GPTLanguageModel(cfg).to(device)
     model.load_state_dict(checkpoint["model_state"])
     model.set_gradient_checkpointing(args.gradient_checkpointing)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
+    method_config = build_method_config(args)
+    apply_finetune_method(model, method_config)
+    trainable_params = [parameter for parameter in model.parameters() if parameter.requires_grad]
+    if not trainable_params:
+        raise ValueError("selected fine-tuning method left no trainable parameters")
+    optimizer = torch.optim.AdamW(trainable_params, lr=args.lr)
 
     train_examples = load_sft_examples(args.train_input, max_samples=args.max_samples)
     if args.valid_input is None:
@@ -139,7 +182,11 @@ def run_sft(args: argparse.Namespace) -> None:
         len(valid_samples),
     )
     logger.info(
-        "starting SFT loop | steps=%d | batch_size=%d | lr=%.2e | min_lr=%.2e",
+        "starting SFT loop | method=%s | trainable_parameters=%d/%d | steps=%d "
+        "| batch_size=%d | lr=%.2e | min_lr=%.2e",
+        method_config.method,
+        trainable_parameter_count(model),
+        model.num_parameters(),
         args.steps,
         args.batch_size,
         args.lr,
@@ -296,10 +343,16 @@ def _save_sft_checkpoint(
     train_loss: float | None,
     val_loss: float | None,
 ) -> None:
+    checkpoint_model = export_inference_model(model)
+    checkpoint_optimizer = (
+        optimizer
+        if checkpoint_model is model
+        else torch.optim.AdamW(checkpoint_model.parameters(), lr=0.0)
+    )
     save_checkpoint(
         path,
-        model=model,
-        optimizer=optimizer,
+        model=checkpoint_model,
+        optimizer=checkpoint_optimizer,
         step=step,
         best_val_loss=best_val_loss,
         special_tokens=special_tokens,
@@ -307,6 +360,20 @@ def _save_sft_checkpoint(
         val_loss=val_loss,
     )
     logger.info("saved checkpoint | path=%s", path)
+
+
+def build_method_config(args: argparse.Namespace) -> FinetuneMethodConfig:
+    return FinetuneMethodConfig(
+        method=getattr(args, "method", "full"),
+        lora_rank=getattr(args, "lora_rank", 8),
+        lora_alpha=getattr(args, "lora_alpha", 16.0),
+        lora_dropout=getattr(args, "lora_dropout", 0.05),
+        lora_targets=getattr(args, "lora_targets", DEFAULT_LORA_TARGETS),
+        freeze_last_layers=getattr(args, "freeze_last_layers", 0),
+        freeze_train_embeddings=getattr(args, "freeze_train_embeddings", False),
+        adapter_train_head=getattr(args, "adapter_train_head", False),
+        adapter_train_norms=getattr(args, "adapter_train_norms", False),
+    )
 
 
 def _copy_tokenizer_files(model_dir: Path, output_dir: Path) -> None:
@@ -329,6 +396,15 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise ValueError("eval_iters must be positive")
     if args.max_samples is not None and args.max_samples <= 0:
         raise ValueError("max_samples must be positive")
+    if getattr(args, "lora_rank", 8) <= 0:
+        raise ValueError("lora_rank must be positive")
+    if getattr(args, "lora_alpha", 16.0) <= 0:
+        raise ValueError("lora_alpha must be positive")
+    lora_dropout = getattr(args, "lora_dropout", 0.05)
+    if not 0 <= lora_dropout < 1:
+        raise ValueError("lora_dropout must be in [0, 1)")
+    if getattr(args, "freeze_last_layers", 0) < 0:
+        raise ValueError("freeze_last_layers must be non-negative")
 
 
 if __name__ == "__main__":
