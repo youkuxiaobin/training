@@ -82,8 +82,13 @@ class TextGenerator:
             use_cache=use_cache,
         )
         output = output_ids[0].tolist()
+        completion = output[len(prompt_ids) :]
+        if eos_id is not None and completion and completion[-1] == eos_id:
+            completion = completion[:-1]
         if not include_prompt:
-            output = output[len(prompt_ids) :]
+            output = completion
+        else:
+            output = prompt_ids + completion
         return self.tokenizer.decode(output)
 
     def _eos_id(self) -> int | None:
